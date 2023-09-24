@@ -548,78 +548,8 @@ void copy_file(char * sourcePath, char * destinationPath, superblock * super_blo
       }
     }
   }
-
-  int inodeNumber = -1;
   if(destFileFound==0){
-    temp2 = (pathNode *) malloc(sizeof(pathNode));
-  } else {
-    inodeNumber = temp2->direntEntry.inode;
-  }
-  int numberOfBlocks = ceil((double)super_block->inode_list[temp1->direntEntry.inode].size/sizeof(block));
-  int newFileBlockPtrs[numberOfBlocks];
-  //find free blocks and storing them in newFileBlockPtrs, if not enough free blocks, return
-  for(int i=0; i<numberOfBlocks; i++){
-    for(int j=1; j<128; j++){
-      if(super_block->free_block_list[j]=='0'){        
-        newFileBlockPtrs[i]=j;
-        break;
-      }
-      if(j==127){
-        printf("Not enough free space.\n");
-        return;
-      }
-    }
-  }
-
-  if(inodeNumber==-1){
-    for(int i=0; i<16; i++){
-      if(super_block->inode_list[i].used == 0){
-        super_block->inode_list[i].used = 1;
-        super_block->inode_list[i].dir = 0;
-        strcpy(super_block->inode_list[i].name, destFileName);
-        super_block->inode_list[i].size = super_block->inode_list[temp1->direntEntry.inode].size;
-        for(int j=0; j<numberOfBlocks; j++){
-          super_block->inode_list[i].blockptrs[j] = newFileBlockPtrs[j];
-        }      
-        inodeNumber = i;
-        break;
-      }
-    }
-  }
-  for(int i=numberOfBlocks; i<8; i++){
-    super_block->inode_list[inodeNumber].blockptrs[i] = -1;
-  }
-  if(inodeNumber==-1){
-    printf("Not enough free space.\n");
-    return;
-  }
-
-  //As no errors have been found, now we will start updating our data structures
-
-  for(int i=0; i<numberOfBlocks; i++){
-    //update free block list
-    super_block->free_block_list[newFileBlockPtrs[i]]='1';    
-    //insert data into block
-    for(int j=0; j<1024; j++){
-      //copying data from temp1 into temp2 i.e. source to destination
-      blocks[newFileBlockPtrs[i]]->data[j] = blocks[super_block->inode_list[temp1->direntEntry.inode].blockptrs[i]]->data[j];
-    }    
-  }
-
-  pathNode * copiedNode = temp2;
-  copiedNode->direntEntry.inode = inodeNumber;
-  copiedNode->direntEntry.namelen = strlen(destFileName);
-  strcpy(copiedNode->direntEntry.name, destFileName);
-  copiedNode->child = NULL;
-  copiedNode->parent = parent2;
-  if(destFileFound==0){
-    copiedNode->sibling = NULL;
-  }
-
-  int destFileSize = super_block->inode_list[temp2->direntEntry.inode].size;
-  while(parent2!=NULL){
-    super_block->inode_list[parent2->direntEntry.inode].size = super_block->inode_list[parent2->direntEntry.inode].size + destFileSize;
-    parent2 = parent2->parent;
+    pathNode * temp2 = (pathNode *) malloc(sizeof(pathNode));
   }
 }
 
@@ -684,9 +614,6 @@ int main (int argc, char* argv[]) {
   listAllFiles(super_block, rootNode);
   printf("\n");
   delete_directory("/frost", super_block, rootNode);
-  listAllFiles(super_block, rootNode);
-  printf("\n");
-  copy_file("/nest.txt", "/fire/nest.txt", super_block, blocks, rootNode);
   listAllFiles(super_block, rootNode);
   printf("\n");
   //listAllDirectories(super_block, rootNode);
