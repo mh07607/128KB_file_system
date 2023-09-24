@@ -1,47 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
-
-
-/*
- *   ___ ___ ___ ___ ___ ___ ___ ___ ___ ___ ___ 
- *  |   |   |   |   |                       |   |
- *  | 0 | 1 | 2 | 3 |     .....             |127|
- *  |___|___|___|___|_______________________|___|
- *  |   \    <-----  data blocks ------>
- *  |     \
- *  |       \
- *  |         \
- *  |           \
- *  |             \
- *  |               \
- *  |                 \
- *  |                   \
- *  |                     \
- *  |                       \
- *  |                         \
- *  |                           \
- *  |                             \
- *  |                               \
- *  |                                 \
- *  |                                   \
- *  |                                     \
- *  |                                       \
- *  |                                         \
- *  |                                           \
- *  |     <--- super block --->                   \
- *  |______________________________________________|
- *  |               |      |      |        |       |
- *  |        free   |      |      |        |       |
- *  |       block   |inode0|inode1|   .... |inode15|
- *  |        list   |      |      |        |       |
- *  |_______________|______|______|________|_______|
- *
- *
- */
-
+#include <string.h>
+#include <math.h>
 
 #define FILENAME_MAXLEN 8  // including the NULL char
+#define SUPERBLOCK_SIZE sizeof(superblock)
+#define BLOCK_SIZE sizeof(block)
+#define INODE_SIZE sizeof(inode)
 
+typedef struct block {
+  char data[1024];
+} block;
 /* 
  * inode 
  */
@@ -65,16 +34,13 @@ typedef struct dirent {
 } dirent;
 
 typedef struct pathNode {
-  struct pathNode ** children;
-  dirent * entry;
+  dirent direntEntry;
+  struct pathNode * child;
+  struct pathNode * sibling;
 } pathNode;
 
-typedef struct block {
-  char data[1024];
-} block;
-
 typedef struct superblock {
-  //can replace with a enum for free and used
+  //'0' for free, '1' for used; can replace with a enum for free and used
   char free_block_list[128];
   inode inode_list[16];
   //total size = 128 + 16*56 = 1024 Bytes
@@ -91,35 +57,99 @@ typedef struct superblock {
 // create directory
 // remove a directory
 
-void create_file(char * fileName, int size) {
+void create_file(char * fileName, int size, superblock * super_block, block * blocks[127], pathNode * root) {
+  // assuming size is in bytes
   // find a free inode
   // find a free block
   // update inode
   // update block
   // update superblock
+  // inode->dirent->pathNode
+  int numberOfBlocks = ceil((double)size/sizeof(block));
+  int newFileBlockPtrs[numberOfBlocks];
+
+  for(int i=0; i<127; i++){
+    for(int j=0; j < numberOfBlocks; j++){
+      if(super_block->free_block_list[i] == '0'){
+        super_block->free_block_list[i] = '1';
+
+        newFileBlockPtrs[j] = i;
+        break;
+      }
+    }
+  }
+
+  int inodeNumber;
+  for(int i=0; i<16; i++){
+    if(super_block->inode_list[i].used == 0){
+      super_block->inode_list[i].used = 1;
+      super_block->inode_list[i].dir = 0;
+      strcpy(super_block->inode_list[i].name, fileName);
+      super_block->inode_list[i].size = size;
+      for(int j=0; j<numberOfBlocks; j++){
+        super_block->inode_list[i].blockptrs[j] = newFileBlockPtrs[j];
+      }      
+      inodeNumber = i;
+      break;
+    }
+  }
+
+  //create pathNode
+  root->child = (pathNode *) malloc(sizeof(pathNode));
+  root->child->direntEntry.inode = inodeNumber;
+  root->child->direntEntry.namelen = strlen(fileName);
+  strcpy(root->child->direntEntry.name, fileName);
+  root->child->child = NULL;
+  root->child->sibling = NULL;
 }
 
-void create_directory(char * directoryName, int size){
-  
+void create_directory(char * directoryName, int size, superblock * super_block) {
+  // find a free inode
+  // find a free block
+  // update inode
+  // update block
+  // update superblock
+
 }
 
+void initializeRoot(){
+
+}
 /*
  * main
  */
 int main (int argc, char* argv[]) {
+  // Initialize file system
   void * file_system = malloc(128*1024);  // 128KB
+  // Initialize superblock
   superblock * super_block = (superblock *) file_system;
-  block * blocks[127] = (block *) file_system;
-
+  super_block->free_block_list[0] = '1';
+  for(int i=1; i<128; i++){
+    super_block->free_block_list[i] = '0';
+  }
+  // Initialize blocks array
+  block * blocks[127];
+  for (int i = 0; i < 127; i++) {
+      blocks[i] = (block*)((char*)file_system + SUPERBLOCK_SIZE + i * BLOCK_SIZE);
+  }
+  //root directory
   inode * root = (inode *) file_system;
+  super_block->inode_list[0] = *root;
   root->dir = 1;
-  root->name[0] = '/';
+  strcpy(root->name, "/");
   root->size = 0;
   root->used = 1;
+  root->blockptrs[0]=0;
+  pathNode * rootPathNode = (pathNode *) malloc(sizeof(pathNode));
+  rootPathNode->direntEntry.inode = 0;
+  rootPathNode->direntEntry.namelen = 1;
+  strcpy(rootPathNode->direntEntry.name, "/");
+  rootPathNode->child = NULL;
+  rootPathNode->sibling = NULL;
 
-
-
-  printf("%llu\n", sizeof(*root));
+  printf("%s\n", root->name);
+  create_file("test.txt", 1024, super_block, blocks, rootPathNode);
+  printf("%s\n", rootPathNode->child->direntEntry.name);
   free(file_system);
   // while not EOF
     // read command
