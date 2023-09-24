@@ -78,14 +78,6 @@ int parseFileName(const char *path, char ***parts) {
 }
 
 void create_file(char * filePath, int size, superblock * super_block, block * blocks[127], pathNode * root) {
-  // assuming size is in bytes
-  // find a free inode
-  // find a free block
-  // update inode
-  // update block
-  // update superblock
-  // inode->dirent->pathNode
-
   int numberOfBlocks = ceil((double)size/sizeof(block));
   if(numberOfBlocks > 8) {
     printf("File size too large.\n");
@@ -144,16 +136,8 @@ void create_file(char * filePath, int size, superblock * super_block, block * bl
           return;
         }
       }
-      //free(temp2);
     }
   }
-  // while(temp->sibling != NULL){
-  //   temp = temp->sibling;
-  //   if(strcmp(temp->direntEntry.name, fileName)==0){
-  //     printf("File already exists.\n");
-  //     return;
-  //   }
-  // }
 
   //find free blocks and storing them in newFileBlockPtrs, if not enough free blocks, return
   for(int i=0; i<numberOfBlocks; i++){
@@ -184,6 +168,11 @@ void create_file(char * filePath, int size, superblock * super_block, block * bl
     }
   }
 
+  //set unused block pointers to NULL
+  for(int i=numberOfBlocks; i<8; i++){
+    super_block->inode_list[inodeNumber].blockptrs[i] = -1;
+  }
+
   if(inodeNumber==-1){
     printf("Not enough free space.\n");
     return;
@@ -200,6 +189,7 @@ void create_file(char * filePath, int size, superblock * super_block, block * bl
       blocks[newFileBlockPtrs[i]]->data[j] = 'a'+(j)%26;
     }    
   }
+
 
   //create pathNode
   pathNode * node = (pathNode *) malloc(sizeof(pathNode));
@@ -219,6 +209,79 @@ void create_file(char * filePath, int size, superblock * super_block, block * bl
       temp = temp->sibling;
     }
     temp->sibling=node;
+  }
+}
+
+void delete_file(char * filePath, superblock * super_block, pathNode * root) {
+  //splitting path into an array of strings
+  char** path;
+  int count = parseFileName(filePath, &path);
+  char* fileName = path[count-1];
+
+  pathNode * temp = root;
+  for(int i=0; i<count-1; i++){
+    //printf("%s\n", temp->direntEntry.name);
+    if(temp==NULL){
+      printf("Incorrect file path. (temp==NULL)\n");
+      return;
+    }
+    if(temp->child==NULL){
+      printf("Incorrect file path. (temp->child==NULL)\n");
+      return;
+    }
+    int pathfound = 0;
+    temp=temp->child;
+    if(temp->direntEntry.name==path[i]){
+      pathfound=1;
+    }
+    else {
+      while(temp->sibling != NULL){
+        temp = temp->sibling;
+        if(strcmp(temp->direntEntry.name, path[i])==0){
+          pathfound=1;
+          break;
+        }
+      }
+    }
+    if(pathfound==0){
+      printf("Incorrect file path. (pathfound==0)\n");
+      return;
+    }
+  }
+
+  int fileFound = 0;
+  //checking if file exists
+  if(temp->child!=NULL){
+    if(strcmp(temp->child->direntEntry.name, fileName)==0){
+      pathNode * node = temp->child;
+      temp->child = node->sibling;
+      free(node);
+      fileFound = 1;
+    } 
+    else {
+      temp = temp->child;
+      while(temp->sibling != NULL){
+        if(strcmp(temp->sibling->direntEntry.name, fileName)==0){
+          pathNode * node = temp->sibling;
+          super_block->inode_list[node->direntEntry.inode].used = 0;
+          for(int i=0; i<8; i++){
+            if(super_block->inode_list[node->direntEntry.inode].blockptrs[i]!=-1){
+              super_block->free_block_list[super_block->inode_list[node->direntEntry.inode].blockptrs[i]]='0';
+            }
+          }
+          temp->sibling = node->sibling;
+          free(node);          
+          fileFound = 1;
+          break;
+        }
+        temp = temp->sibling;
+      }
+    }
+  }
+
+  if(fileFound==0){
+    printf("File not found.\n");
+    return;
   }
 }
 
@@ -407,6 +470,9 @@ int main (int argc, char* argv[]) {
   create_file("/frost/yosh/mest.txt", 1024, super_block, blocks, rootNode);
   create_file("/frost/yosh/mest.txt", 1024, super_block, blocks, rootNode);
   
+  listAllFiles(super_block, rootNode);
+  delete_file("/frost/yosh/mest.txt", super_block, rootNode);
+  delete_file("/test.txt", super_block, rootNode);
   listAllFiles(super_block, rootNode);
   //listAllDirectories(super_block, rootNode);
 
