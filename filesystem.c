@@ -869,6 +869,9 @@ int main (int argc, char* argv[]) {
   move_file("/frost/best.txt", "/fire/best.txt", super_block, blocks, rootNode);
   listAllFiles(super_block, rootNode);
   printf("\n");
+  for(int i = 0; i < 8; i++) {
+    printf("%s\n", blocks[super_block->inode_list[rootNode->child->child->direntEntry.inode].blockptrs[i]]->data);
+  }
   //listAllDirectories(super_block, rootNode);
 
   // while not EOF
