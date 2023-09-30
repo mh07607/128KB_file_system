@@ -1,12 +1,12 @@
 build:
-	gcc filesystem.c -Wall -o filesystem.exe
+	compile
 
 launch:
 	gcc filesystem.c -Wall -o filesystem.exe
-	filesystem.exe sampleinput.txt
+	./filesystem.exe sampleinput.txt
 	
 clean:
-	rm -f filesystem.exe
+	rm filesystem.exe	
 
 compile:
 	gcc filesystem.c -Wall -o filesystem.exe
