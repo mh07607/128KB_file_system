@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <ctype.h> //for isspace()
 
 #define FILENAME_MAXLEN 8  // including the NULL char
 #define SUPERBLOCK_SIZE sizeof(superblock)
@@ -47,16 +48,6 @@ typedef struct superblock {
   //total size = 128 + 16*56 = 1024 Bytes
 } superblock;
 
-/*
- * functions
- */
-// create file
-// copy file
-// remove/delete file
-// move a file
-// list file info
-// create directory
-// remove a directory
 
 int parseFileName(const char *path, char ***parts) {
     char *token;
@@ -319,11 +310,6 @@ void delete_file(char * filePath, superblock * super_block, Node * root) {
 }
 
 void create_directory(char * directoryPath, superblock * super_block, Node * root) {
-  // find a free inode
-  // find a free block
-  // update inode
-  // update block
-  // update superblock
   //splitting path into an array of strings
   char** path;
   int count = parseFileName(directoryPath, &path);
@@ -627,15 +613,17 @@ void copy_file(char * sourcePath, char * destinationPath, superblock * super_blo
   int destFileFound = 0;
   int previousDestSize;
   if(temp2->child!=NULL){
-    if(strcmp(temp2->child->direntEntry.name, destFileName)==0){
+    if(strcmp(temp2->child->direntEntry.name, destFileName)==0){      
       temp2=temp2->child;
-      destFileFound=1;
+      previousDestSize = super_block->inode_list[temp2->direntEntry.inode].size;
+      destFileFound=1;      
     }
     else {
       temp2 = temp2->child;
       while(temp2->sibling != NULL){
         temp2 = temp2->sibling;
         if(strcmp(temp2->direntEntry.name, destFileName)==0){
+          previousDestSize = super_block->inode_list[temp2->direntEntry.inode].size;
           destFileFound=1;
           break;
         }
@@ -724,6 +712,9 @@ void copy_file(char * sourcePath, char * destinationPath, superblock * super_blo
   int destFileSize = super_block->inode_list[temp1->direntEntry.inode].size;
   super_block->inode_list[copiedNode->direntEntry.inode].size = destFileSize;
   while(parent2!=NULL){
+    if(destFileFound==1){
+      super_block->inode_list[parent2->direntEntry.inode].size = super_block->inode_list[parent2->direntEntry.inode].size - previousDestSize;  
+    }
     super_block->inode_list[parent2->direntEntry.inode].size = super_block->inode_list[parent2->direntEntry.inode].size + destFileSize;
     parent2 = parent2->parent;
   }
@@ -864,6 +855,7 @@ void move_file(char * sourcePath, char * destinationPath, superblock * super_blo
   //freeing memory
   free_paths(srcPathArr, count);
   free_paths(destPathArr, count2);
+  free(srcNode);
 }
 
 void recursively_free_all_nodes(Node * node) {
@@ -880,11 +872,6 @@ void recursively_free_all_nodes(Node * node) {
 
     recursively_free_all_nodes(sibling);
 }
-
-void initialize(){
-
-}
-
 
 // Function to save the state of the filesystem to a file
 int save_state(const char *filename, superblock *super_block, Node *root, block *blocks[127]) {
@@ -999,17 +986,17 @@ void regenerate_file(char * filePath, int size, int * block_ptrs, superblock * s
 int load_state(const char *filename, superblock *super_block, Node * rootNode, block *blocks[127]) {
   FILE *fstream = fopen(filename, "r");
   if (fstream == NULL) {
-      printf("File doesn't exist. Continuing without file\n");
+      printf("myfs doesn't exist. Continuing without file\n");
       return -1; // Error opening the file
   }
 
     // Read and process the file paths and block pointers
-  char line[512]; // Adjust the buffer size as needed
+  char line[1024]; // Adjust the buffer size as needed
   int isBlockDataSection = 0;
   int blockIndex = 0;  
-  
+
   while (fgets(line, sizeof(line), fstream) != NULL) {
-    if (strcmp(line, "\n") == 0) {
+    if (isspace(line[0])) {
       isBlockDataSection = 1;
       continue;
     }
@@ -1026,32 +1013,27 @@ int load_state(const char *filename, superblock *super_block, Node * rootNode, b
         for (int i = 0; i < 8; i++) {
           token = strtok(NULL, ", ");
           blockptrs[i] = atoi(token);
-        }
-          printf("%d, %s, %d, %d, %d, %d, %d, %d, %d, %d, %d\n",
-          dir,
-          path,
-          size,
-          blockptrs[0],
-          blockptrs[1],
-          blockptrs[2],
-          blockptrs[3],
-          blockptrs[4],
-          blockptrs[5],
-          blockptrs[6],
-          blockptrs[7]);
+        }          
 
-          if(dir==1){
-            create_directory(path, super_block, rootNode);
-          } else {
-            regenerate_file(path, size, blockptrs, super_block, blocks, rootNode);
-          }
+      if(dir==1){
+        create_directory(path, super_block, rootNode);
+      } else {
+        regenerate_file(path, size, blockptrs, super_block, blocks, rootNode);
+      }
 
       }
-    } else {                      
-      for(int i = 0; i < 1024; i++){
+    } 
+    else
+    {                      
+      // Copy the line to the block     
+      if(blockIndex > 127){
+        break;
+      }
+      for(int i=0; i<1024; i++){        
         blocks[blockIndex]->data[i] = line[i];
       }
       blockIndex++;
+
     }
   }
 
@@ -1122,8 +1104,7 @@ int main (int argc, char* argv[]) {
     if(strcmp(result[0], "CD")==0){
       create_directory(result[1], super_block, rootNode);
     }
-    else if(strcmp(result[0], "CR")==0){
-      printf("%s\n", result[1]);
+    else if(strcmp(result[0], "CR")==0){      
       create_file(result[1], atoi(result[2]), super_block, blocks, rootNode);
     }
     else if(strcmp(result[0], "CP")==0){
@@ -1146,8 +1127,6 @@ int main (int argc, char* argv[]) {
     }
   }
   fclose(fstream);
-
-  list_all_files(super_block, rootNode);
 
   save_state("myfs", super_block, rootNode, blocks);
 

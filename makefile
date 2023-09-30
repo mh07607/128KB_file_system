@@ -3,8 +3,10 @@ build:
 
 launch:
 	gcc filesystem.c -Wall -o filesystem.exe
-	filesystem.exe
+	filesystem.exe sampleinput.txt
 	
-test:
-	gcc a.c -Wall -o a.exe
-	a.exe
+clean:
+	rm -f filesystem.exe
+
+compile:
+	gcc filesystem.c -Wall -o filesystem.exe
